@@ -1,0 +1,9 @@
+flask
+PyMuPDF
+Pillow
+pytesseract
+pdf2image
+requests
+Werkzeug
+opencv-python
+numpy

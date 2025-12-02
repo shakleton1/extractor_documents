@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Обработчик Документов</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <script src="https://unpkg.com/xlsx/dist/xlsx.full.min.js"></script>
+    <style>
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .processing-icon {
+            display: none;
+            margin-left: 8px;
+            color: #007bff;
+            animation: spin 1s linear infinite;
+        }
+
+        .success-icon {
+            display: none;
+            margin-left: 8px;
+            color: #28a745;
+        }
+
+        .file-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            width: 100%;
+        }
+
+        .file-info {
+            display: flex;
+            align-items: center;
+        }
+
+        .file-status {
+            display: flex;
+            align-items: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="container-fluid">
+        <div class="row vh-100">
+            <!-- Left Panel - File Upload -->
+            <div class="col-md-4 left-panel p-4">
+                <!-- Tabs Navigation -->
+                <ul class="nav nav-tabs mb-4" id="mainTabs" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="upload-tab" data-bs-toggle="tab" data-bs-target="#upload-pane" type="button" role="tab">
+                            <i class="fas fa-upload me-1"></i>Загрузка
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="settings-tab" data-bs-toggle="tab" data-bs-target="#settings-pane" type="button" role="tab">
+                            <i class="fas fa-cog me-1"></i>Настройки
+                        </button>
+                    </li>
+                </ul>
+
+                <!-- Tab Content -->
+                <div class="tab-content" id="mainTabContent">
+                    <!-- Upload Tab -->
+                    <div class="tab-pane fade show active" id="upload-pane" role="tabpanel">
+                        <h2 class="mb-4">Загрузка Документов</h2>
+                <div class="upload-area" id="dropZone">
+                    <i class="fas fa-cloud-upload-alt fa-3x mb-3"></i>
+                    <p>Перетащите файлы сюда или</p>
+                    <input type="file" id="fileInput" multiple class="d-none">
+                    <button class="btn btn-primary" onclick="document.getElementById('fileInput').click()">
+                        Выбрать Файлы
+                    </button>
+                </div>
+                <div class="file-list mt-4">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <h4 class="mb-0">Загруженные Файлы</h4>
+                        <button id="clearFiles" class="btn btn-sm btn-outline-danger">
+                            <i class="fas fa-trash me-1"></i>Очистить
+                        </button>
+                    </div>
+                    <div id="fileList" class="list-group">
+                        <!-- Files will be listed here -->
+                    </div>
+                </div>
+                    </div>
+                    
+                    <!-- Settings Tab -->
+                    <div class="tab-pane fade" id="settings-pane" role="tabpanel">
+                        <h2 class="mb-4">Настройки</h2>
+                        
+                        <div class="card mb-4">
+                            <div class="card-header">
+                                <h5 class="mb-0">
+                                    <i class="fas fa-robot me-2"></i>Модель ИИ
+                                </h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="mb-3">
+                                    <label for="modelSelect" class="form-label">Выберите модель:</label>
+                                    <select class="form-select" id="modelSelect">
+                                        <option value="">Загрузка моделей...</option>
+                                    </select>
+                                </div>
+                                
+                                <div class="mb-3" id="customModelDiv" style="display: none;">
+                                    <label for="customModel" class="form-label">Название пользовательской модели:</label>
+                                    <input type="text" class="form-control" id="customModel" placeholder="Введите название модели">
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <label for="apiUrl" class="form-label">URL API:</label>
+                                    <input type="text" class="form-control" id="apiUrl" value="http://localhost:1234/v1/chat/completions" placeholder="http://localhost:1234/v1/chat/completions">
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <label for="apiKey" class="form-label">API ключ (если требуется):</label>
+                                    <input type="password" class="form-control" id="apiKey" placeholder="Введите API ключ">
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="card mb-4">
+                            <div class="card-header">
+                                <h5 class="mb-0">
+                                    <i class="fas fa-edit me-2"></i>Управление шаблонами промптов
+                                </h5>
+                            </div>
+                            <div class="card-body">
+                                <!-- Список шаблонов -->
+                                <div class="mb-3">
+                                    <label for="templateSelect" class="form-label">Выберите шаблон:</label>
+                                    <div class="d-flex gap-2 mb-2">
+                                        <select class="form-select" id="templateSelect">
+                                            <option value="">-- Выберите шаблон --</option>
+                                        </select>
+                                        <button type="button" class="btn btn-success btn-sm" id="loadTemplateBtn">
+                                            <i class="fas fa-download me-1"></i>Загрузить
+                                        </button>
+                                        <button type="button" class="btn btn-danger btn-sm" id="deleteTemplateBtn">
+                                            <i class="fas fa-trash me-1"></i>Удалить
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <!-- Создание/редактирование шаблона -->
+                                <div class="mb-3">
+                                    <label for="templateName" class="form-label">Название шаблона:</label>
+                                    <input type="text" class="form-control" id="templateName" placeholder="Введите название шаблона">
+                                </div>
+
+                                <!-- Редактор промпта -->
+                                <div class="mb-3">
+                                    <label for="promptText" class="form-label">Текст промпта:</label>
+                                    <textarea class="form-control" id="promptText" rows="15" placeholder="Введите ваш промпт..."></textarea>
+                                    <div class="form-text">
+                                        Используйте <code>{text}</code> для обозначения места, где будет вставлен текст документа.
+                                    </div>
+                                </div>
+
+                                <!-- Кнопки управления шаблонами -->
+                                <div class="d-flex gap-2 mb-3">
+                                    <button type="button" class="btn btn-primary" id="saveTemplateBtn">
+                                        <i class="fas fa-save me-1"></i>Сохранить шаблон
+                                    </button>
+                                    <button type="button" class="btn btn-outline-secondary" id="newTemplateBtn">
+                                        <i class="fas fa-plus me-1"></i>Новый шаблон
+                                    </button>
+                                    <button type="button" class="btn btn-outline-info" id="duplicateTemplateBtn">
+                                        <i class="fas fa-copy me-1"></i>Дублировать
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="card mb-4">
+                            <div class="card-header">
+                                <h5 class="mb-0">
+                                    <i class="fas fa-cogs me-2"></i>Параметры генерации
+                                </h5>
+                            </div>
+                            <div class="card-body">
+                                
+                                <div class="mb-3">
+                                    <label for="maxTokens" class="form-label">Максимальное количество токенов:</label>
+                                    <input type="number" class="form-control" id="maxTokens" value="2000" min="100" max="8000">
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <label for="temperature" class="form-label">Temperature (0.0 - 1.0):</label>
+                                    <input type="range" class="form-range" id="temperature" min="0" max="1" step="0.1" value="0.7">
+                                    <div class="d-flex justify-content-between">
+                                        <small>0.0 (детерминированный)</small>
+                                        <small id="temperatureValue">0.7</small>
+                                        <small>1.0 (креативный)</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="d-grid gap-2">
+                            <button class="btn btn-success" id="saveSettings">
+                                <i class="fas fa-save me-2"></i>Сохранить настройки
+                            </button>
+                            <button class="btn btn-outline-secondary" id="resetSettings">
+                                <i class="fas fa-undo me-2"></i>Сбросить к умолчанию
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Panel - Results -->
+            <div class="col-md-8 right-panel p-4">
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <h2>Результаты</h2>
+                    <button id="startProcessing" class="btn btn-success">
+                        <i class="fas fa-play me-2"></i>Начать Обработку
+                    </button>
+                </div>
+
+                <!-- Results Table -->
+                <div class="table-container">
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead id="resultsTableHead">
+                                <tr></tr>
+                            </thead>
+                            <tbody id="resultsTable">
+                                <!-- Results will be populated here -->
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="table-actions">
+                        <button id="exportBtn" class="btn btn-primary">
+                            <i class="fas fa-file-export me-2"></i>Экспорт
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Logs Section -->
+                <div class="logs-section">
+                    <div class="section-header">
+                        <h4 class="mb-0">Логи Обработки</h4>
+                        <div class="header-actions">
+                            <button id="clearLogs" class="btn btn-sm clear-btn btn-outline-danger">
+                                <i class="fas fa-trash me-1"></i>Очистить
+                            </button>
+                            <button id="toggleLogs" class="btn btn-sm clear-btn btn-outline-secondary">
+                                <i class="fas fa-chevron-up"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div id="logs" class="logs-container">
+                        <!-- Logs will be added here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        window.__APP_DEFAULT_SETTINGS__ = {{ default_settings | tojson | safe }};
+    </script>
+    <script src="{{ url_for('static', filename='js/settings.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+</html> 
