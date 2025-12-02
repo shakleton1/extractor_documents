@@ -24,8 +24,8 @@ TESSERACT_CONFIGS = [
 LANGUAGES = 'rus+eng'
 
 DEFAULT_GENERATION_PARAMS = {
-    "max_context_length": 8000,
-    "max_length": 8000,
+    "max_context_length": 2048,
+    "max_length": 100,
     "quiet": False,
     "rep_pen": 1.1,
     "rep_pen_range": 256,
@@ -46,12 +46,14 @@ def _coerce_number(value, fallback):
         return fallback
 
 
+SAFETY_CONTEXT_GAP = 512
+
+
 def build_generation_payload(final_prompt, settings):
     payload = DEFAULT_GENERATION_PARAMS.copy()
     payload['prompt'] = final_prompt
 
     max_length = _coerce_number(settings.get('maxTokens'), payload['max_length'])
-    payload['max_length'] = max_length
 
     explicit_context = settings.get('maxContextLength')
     if explicit_context is not None:
@@ -59,6 +61,12 @@ def build_generation_payload(final_prompt, settings):
     else:
         max_context_length = max(payload['max_context_length'], max_length)
     payload['max_context_length'] = max_context_length
+
+    safe_generation_limit = max_context_length - SAFETY_CONTEXT_GAP
+    if safe_generation_limit < 128:
+        safe_generation_limit = max_context_length
+
+    payload['max_length'] = min(max_length, safe_generation_limit)
 
     payload['temperature'] = _coerce_number(settings.get('temperature'), payload['temperature'])
 
