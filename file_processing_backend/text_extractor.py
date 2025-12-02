@@ -24,8 +24,8 @@ TESSERACT_CONFIGS = [
 LANGUAGES = 'rus+eng'
 
 DEFAULT_GENERATION_PARAMS = {
-    "max_context_length": 2048,
-    "max_length": 512,
+    "max_context_length": 8000,
+    "max_length": 8000,
     "quiet": False,
     "rep_pen": 1.1,
     "rep_pen_range": 256,
