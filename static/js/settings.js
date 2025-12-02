@@ -10,7 +10,7 @@ let appConfig = {
 const FALLBACK_SETTINGS = {
     model: 'yandex/YandexGPT-5-Lite-8B-instruct-GGUF',
     customModel: '',
-    apiUrl: 'http://localhost:1234/v1/chat/completions',
+    apiUrl: 'http://127.0.0.1:5001/api/v1/generate',
     apiKey: '',
     prompt: '',
     maxTokens: 2000,

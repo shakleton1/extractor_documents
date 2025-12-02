@@ -23,6 +23,63 @@ TESSERACT_CONFIGS = [
 ]
 LANGUAGES = 'rus+eng'
 
+DEFAULT_GENERATION_PARAMS = {
+    "max_context_length": 2048,
+    "max_length": 512,
+    "quiet": False,
+    "rep_pen": 1.1,
+    "rep_pen_range": 256,
+    "rep_pen_slope": 1,
+    "temperature": 0.5,
+    "tfs": 1,
+    "top_a": 0,
+    "top_k": 100,
+    "top_p": 0.9,
+    "typical": 1
+}
+
+
+def _coerce_number(value, fallback):
+    try:
+        return type(fallback)(value)
+    except (TypeError, ValueError):
+        return fallback
+
+
+def build_generation_payload(final_prompt, settings):
+    payload = DEFAULT_GENERATION_PARAMS.copy()
+    payload['prompt'] = final_prompt
+
+    max_length = _coerce_number(settings.get('maxTokens'), payload['max_length'])
+    payload['max_length'] = max_length
+
+    explicit_context = settings.get('maxContextLength')
+    if explicit_context is not None:
+        max_context_length = _coerce_number(explicit_context, payload['max_context_length'])
+    else:
+        max_context_length = max(payload['max_context_length'], max_length)
+    payload['max_context_length'] = max_context_length
+
+    payload['temperature'] = _coerce_number(settings.get('temperature'), payload['temperature'])
+
+    override_keys = [
+        'quiet',
+        'rep_pen',
+        'rep_pen_range',
+        'rep_pen_slope',
+        'tfs',
+        'top_a',
+        'top_k',
+        'top_p',
+        'typical'
+    ]
+
+    for key in override_keys:
+        if key in settings:
+            payload[key] = settings[key]
+
+    return payload
+
 def save_debug_file(original_path, suffix, content, mode='w'):
     """Помощник для сохранения отладочных файлов"""
     try:
@@ -316,20 +373,12 @@ def process_text_with_neural_network(text, settings, pdf_path_for_debug=""):
         if pdf_path_for_debug:
             save_debug_file(pdf_path_for_debug, "final_prompt_sent.txt", final_prompt)
 
-        url = settings.get('apiUrl')
+        url = settings.get('apiUrl') or 'http://127.0.0.1:5001/api/v1/generate'
         headers = {"Content-Type": "application/json"}
         if settings.get('apiKey'):
             headers["Authorization"] = f"Bearer {settings['apiKey']}"
 
-        data = {
-            "model": settings.get('model'),
-            "messages": [
-                {"role": "system", "content": "You are a specialized JSON data extractor."},
-                {"role": "user", "content": final_prompt}
-            ],
-            "max_tokens": settings.get('maxTokens', 4000),
-            "temperature": settings.get('temperature', 0.0)
-        }
+        data = build_generation_payload(final_prompt, settings)
 
         print("Отправка запроса в нейросеть...")
         response = requests.post(url, json=data, headers=headers)
@@ -342,7 +391,10 @@ def process_text_with_neural_network(text, settings, pdf_path_for_debug=""):
              return {"error": error_msg}
 
         response_json = response.json()
-        content = response_json['choices'][0]['message']['content']
+        results = response_json.get('results') or []
+        if not results or 'text' not in results[0]:
+            raise ValueError('API вернул неожиданный ответ без текста')
+        content = results[0].get('text', '')
         
         # === СОХРАНЯЕМ СЫРОЙ ОТВЕТ НЕЙРОСЕТИ ===
         if pdf_path_for_debug:

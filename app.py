@@ -26,7 +26,7 @@ SETTINGS_FILE = 'settings.json'
 default_settings = {
     'model': 'yandex/YandexGPT-5-Lite-8B-instruct-GGUF', 
     'customModel': '',
-    'apiUrl': 'http://localhost:1234/v1/chat/completions',
+    'apiUrl': 'http://127.0.0.1:5001/api/v1/generate',
     'apiKey': '',
     'maxTokens': 8000, # Увеличено для запаса на большие ответы
     'temperature': 0.0, # Строго 0 для фактов
